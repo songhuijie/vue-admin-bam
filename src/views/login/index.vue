@@ -3,7 +3,7 @@
     <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form" autocomplete="on" label-position="left">
 
       <div class="title-container">
-        <h3 class="title">Login Form</h3>
+        <h3 class="title">后台管理系统</h3>
       </div>
 
       <el-form-item prop="username">
@@ -13,7 +13,7 @@
         <el-input
           ref="username"
           v-model="loginForm.username"
-          placeholder="Username"
+          placeholder="输入账号"
           name="username"
           type="text"
           tabindex="1"
@@ -31,7 +31,7 @@
             ref="password"
             v-model="loginForm.password"
             :type="passwordType"
-            placeholder="Password"
+            placeholder="输入密码"
             name="password"
             tabindex="2"
             autocomplete="on"
@@ -45,22 +45,50 @@
         </el-form-item>
       </el-tooltip>
 
-      <el-button :loading="loading" type="primary" style="width:100%;margin-bottom:30px;" @click.native.prevent="handleLogin">Login</el-button>
+      <el-form-item prop="verifycode">
+        <!-- 注意：prop与input绑定的值一定要一致，否则验证规则中的value会报undefined，因为value即为绑定的input输入值 -->
+        <el-input v-model="loginForm.verifycode" placeholder="请输入验证码" class="identifyinput custom_width" />
+        <div class="identifybox inline">
+          <div class="inline" @click="refreshCode">
+            <captcha :identify-code="identifyCode" class="inline" />
+            <img class="pic-logo" src="@/assets/login/refresh.png" alt="refresh" @click="refreshCode">
+
+          </div>
+          <!-- <el-button type="text" class="textbtn" @click="refreshCode"><img class="pic-logo" src="@/assets/login/refresh.png" alt="refresh" @click="refreshCode"></el-button> -->
+        </div>
+      </el-form-item>
+
+      <!-- <el-form-item>
+        <div class="identifybox">
+          <div @click="refreshCode" >
+            <captcha :identify-code="identifyCode" class="inline" />
+            <img class="pic-logo" src="@/assets/login/refresh.png" alt="refresh" @click="refreshCode">
+
+          </div>
+        </div>
+      </el-form-item> -->
 
       <div style="position:relative">
-        <div class="tips">
-          <span>Username : admin</span>
-          <span>Password : any</span>
-        </div>
-        <div class="tips">
-          <span style="margin-right:18px;">Username : editor</span>
-          <span>Password : any</span>
-        </div>
+        <el-checkbox label="apple">
+          记住密码
+        </el-checkbox>
 
-        <el-button class="thirdparty-button" type="primary" @click="showDialog=true">
-          Or connect with
-        </el-button>
+        <span class="link-type" @click="ForGetPassword()">忘记密码</span>
       </div>
+
+      <el-button
+        :loading="loading"
+        type="default"
+        style="
+      width:30%;
+      display: block;
+      margin: 40px auto 0px auto;
+      color: #fff;
+      font-size: medium;
+      font-weight: 600;
+      background-color: rgba(0,128,0,0.698039);"
+        @click.native.prevent="handleLogin"
+      >登陆</el-button>
     </el-form>
 
     <el-dialog title="Or connect with" :visible.sync="showDialog">
@@ -74,23 +102,36 @@
 </template>
 
 <script>
+// import { login } from '@/api/user'
 import { validUsername } from '@/utils/validate'
 import SocialSign from './components/SocialSignin'
+import Captcha from '@/components/Captcha'
 
 export default {
   name: 'Login',
-  components: { SocialSign },
+  components: { SocialSign, Captcha },
   data() {
     const validateUsername = (rule, value, callback) => {
       if (!validUsername(value)) {
-        callback(new Error('Please enter the correct user name'))
+        callback(new Error('账号或密码错误'))
       } else {
         callback()
       }
     }
     const validatePassword = (rule, value, callback) => {
-      if (value.length < 6) {
-        callback(new Error('The password can not be less than 6 digits'))
+      if (value.length < 5) {
+        callback(new Error('The password can not be less than 5 digits'))
+      } else {
+        callback()
+      }
+    }
+    // 验证码自定义验证规则
+    const validateVerifycode = (rule, value, callback) => {
+      if (value === '') {
+        callback(new Error('请输入验证码'))
+      } else if (value !== this.identifyCode) {
+        console.log('validateVerifycode:', value)
+        callback(new Error('验证码不正确!'))
       } else {
         callback()
       }
@@ -98,17 +139,23 @@ export default {
     return {
       loginForm: {
         username: 'admin',
-        password: '111111'
+        password: 'admin',
+        verifycode: ''
       },
+      identifyCodes: '1234567890',
+      identifyCode: '',
       loginRules: {
         username: [{ required: true, trigger: 'blur', validator: validateUsername }],
-        password: [{ required: true, trigger: 'blur', validator: validatePassword }]
+        password: [{ required: true, trigger: 'blur', validator: validatePassword }],
+        verifycode: [
+          { required: true, trigger: 'blur', validator: validateVerifycode }
+        ]
       },
       passwordType: 'password',
       capsTooltip: false,
       loading: false,
       showDialog: false,
-      redirect: undefined,
+      redirect: 'dashbord',
       otherQuery: {}
     }
   },
@@ -133,6 +180,9 @@ export default {
     } else if (this.loginForm.password === '') {
       this.$refs.password.focus()
     }
+    // 验证码初始化
+    this.identifyCode = ''
+    this.makeCode(this.identifyCodes, 4)
   },
   destroyed() {
     // window.removeEventListener('storage', this.afterQRScan)
@@ -156,6 +206,22 @@ export default {
       this.$refs.loginForm.validate(valid => {
         if (valid) {
           this.loading = true
+
+          // login(this.loginForm)
+          //   .then(() => {
+
+          //     const data = response.data
+          //     console.log('返回')
+          //     commit('SET_TOKEN', data.api_token)
+          //     commit('SET_ROLES', '')
+          //     commit('SET_NAME', data.user_name)
+          //     commit('SET_AVATAR', '')
+          //     commit('SET_INTRODUCTION', data.user_name)
+          //     setToken(data.api_token)
+          //     console.log('登录成功 跳转');
+          //     this.$router.push({ path: this.redirect || '/', query: this.otherQuery })
+
+          // })
           this.$store.dispatch('user/login', this.loginForm)
             .then(() => {
               this.$router.push({ path: this.redirect || '/', query: this.otherQuery })
@@ -177,7 +243,29 @@ export default {
         }
         return acc
       }, {})
+    },
+    ForGetPassword() {
+      console.log('忘记密码')
+    },
+    // 生成随机数
+    randomNum(min, max) {
+      return Math.floor(Math.random() * (max - min) + min)
+    },
+    // 切换验证码
+    refreshCode() {
+      this.identifyCode = ''
+      this.makeCode(this.identifyCodes, 4)
+    },
+    // 生成四位随机验证码
+    makeCode(o, l) {
+      for (let i = 0; i < l; i++) {
+        this.identifyCode += this.identifyCodes[
+          this.randomNum(0, this.identifyCodes.length)
+        ]
+      }
+      console.log(this.identifyCode)
     }
+
     // afterQRScan() {
     //   if (e.key === 'x-admin-oauth-code') {
     //     const code = getQueryObject(e.newValue)
@@ -206,6 +294,7 @@ export default {
 
 $bg:#283443;
 $light_gray:#fff;
+$light_gray:#000;
 $cursor: #fff;
 
 @supports (-webkit-mask: none) and (not (cater-color: $cursor)) {
@@ -244,27 +333,35 @@ $cursor: #fff;
     border-radius: 5px;
     color: #454545;
   }
+
 }
 </style>
 
 <style lang="scss" scoped>
-$bg:#2d3a4b;
+$bg:rgba(0, 128, 0, 0.698039215686274);
 $dark_gray:#889aa4;
 $light_gray:#eee;
 
 .login-container {
   min-height: 100%;
   width: 100%;
-  background-color: $bg;
+  // background-color: $bg;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.15) 100%), radial-gradient(at top center, rgba(255,255,255,0.40) 0%, rgba(0,0,0,0.40) 120%) #989898;
+  background-blend-mode: multiply,multiply;
   overflow: hidden;
-
+  .link-type{
+    position: relative;
+    left: 60%;
+  }
   .login-form {
     position: relative;
-    width: 520px;
+    width: 420px;
     max-width: 100%;
-    padding: 160px 35px 0;
-    margin: 0 auto;
+    padding: 35px 20px;
+    margin: 160px auto;
     overflow: hidden;
+    background-color: #fff;
+    border-radius:5px;
   }
 
   .tips {
@@ -314,6 +411,17 @@ $light_gray:#eee;
     right: 0;
     bottom: 6px;
   }
+
+  .inline{
+    display: inline;
+  }
+  .custom_width{
+    width: 45%;
+  }
+  #s-canvas {
+    position: relative;
+    top: 10px;
+}
 
   @media only screen and (max-width: 470px) {
     .thirdparty-button {
